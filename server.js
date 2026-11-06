@@ -1,5 +1,16 @@
+require("dotenv").config();
+var mongoose = require("mongoose");
+var Lesson = require("./models/lesson");
 
 var express = require("express");
+
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+        console.log("Connected to MongoDB Atlas!");
+    })
+    .catch((error) => {
+        console.error("MongoDB connection error:", error);
+    });
 var cors = require("cors");
 
 var app = express();
@@ -98,6 +109,31 @@ var lessons = [
   }
 ];
 
+app.post("/seed-lessons", async function(request, response) {
+    try {
+        const existingLessons = await Lesson.find({}, { id: 1 });
+        const existingIds = existingLessons.map(lesson => lesson.id);
+
+        const newLessons = lessons.filter(
+            lesson => !existingIds.includes(lesson.id)
+        );
+
+        if (newLessons.length === 0) {
+            return response.json({ message: "All lessons already exist" });
+        }
+
+        const inserted = await Lesson.insertMany(newLessons);
+
+        response.json({
+            message: "Lessons inserted successfully",
+            count: inserted.length
+        });
+
+    } catch (error) {
+        response.status(500).json({ error: error.message });
+    }
+});
+
 app.post("/orders", function(request, response) {
     const order = request.body;
 
@@ -107,14 +143,21 @@ app.post("/orders", function(request, response) {
     response.json("Order received successfully");
 });
 
-app.get("/lessons", function(request, response) {
-    response.json(lessons);
+app.get("/lessons", async function(request, response) {
+    try {
+        const lessonsFromDB = await Lesson.find({});
+        response.json(lessonsFromDB);
+    } catch (error) {
+        response.status(500).json({ error: "Failed to fetch lessons" });
+    }
 });
 
 app.use(function(request, response) {
     response.status(404).send("Page not found!");
 });
 
-app.listen(3000, function() {
-  console.log("App started on port 3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', function() {
+    console.log(`App started on port ${PORT}`);
 });
