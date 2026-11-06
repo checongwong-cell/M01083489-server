@@ -1,6 +1,7 @@
 require("dotenv").config();
 var mongoose = require("mongoose");
 var Lesson = require("./models/lesson");
+var Order = require("./models/order");
 
 var express = require("express");
 
@@ -134,13 +135,23 @@ app.post("/seed-lessons", async function(request, response) {
     }
 });
 
-app.post("/orders", function(request, response) {
-    const order = request.body;
+app.post("/orders", async function(request, response) {
+    try {
+        const order = new Order(request.body);
+        await order.save();
 
-    console.log("New order received:");
-    console.log(order);
+        console.log("New order saved:", order);
 
-    response.json("Order received successfully");
+        response.status(201).json({
+            message: "Order saved successfully",
+            order: order
+        });
+    } catch (error) {
+        console.error("Order saving error:", error);
+        response.status(500).json({
+            error: error.message
+        });
+    }
 });
 
 app.get("/lessons", async function(request, response) {
