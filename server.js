@@ -163,6 +163,35 @@ app.get("/lessons", async function(request, response) {
     }
 });
 
+app.put("/lessons/:id", async function(request, response) {
+    try {
+        const lesson = await Lesson.findOneAndUpdate(
+            {
+                id: Number(request.params.id),
+                space: { $gt: 0 }
+            },
+            {
+                $inc: { space: -1 }
+            },
+            { new: true }
+        );
+
+        if (!lesson) {
+            return response.status(404).json({
+                message: "Lesson not found or no spaces available"
+            });
+        }
+
+        response.json({
+            message: "Lesson space updated successfully",
+            lesson: lesson
+        });
+
+    } catch (error) {
+        response.status(500).json({ error: error.message });
+    }
+});
+
 app.use(function(request, response) {
     response.status(404).send("Page not found!");
 });
