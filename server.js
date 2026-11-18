@@ -31,12 +31,6 @@ async function connectToMongoDB() {
         db = client.db("test");
 
         console.log("Connected to MongoDB Atlas!");
-
-        const PORT = process.env.PORT || 3000;
-
-        app.listen(PORT, "0.0.0.0", function() {
-            console.log("App started on port " + PORT);
-        });
     } catch (error) {
         console.error("MongoDB connection error:", error);
     }
@@ -265,4 +259,10 @@ app.use(function(request, response) {
 });
 
 // Start the server after connecting to MongoDB
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", function() {
+    console.log("App started on port " + PORT);
+});
+
 connectToMongoDB();
