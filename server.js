@@ -217,24 +217,46 @@ app.get("/lessons", async function(request, response) {
     }
 });
 
-// Update lesson spaces when a lesson is purchased
+// Update any lesson attribute
 app.put("/lessons/:id", async function(request, response) {
     try {
         const lessonId = Number(request.params.id);
 
+        const updates = { ...request.body };
+
+        // Prevent changing the lesson ID or MongoDB ID
+        delete updates.id;
+        delete updates._id;
+
+        // Check that there is something to update
+        if (Object.keys(updates).length === 0) {
+            return response.status(400).json({
+                message: "Please provide an attribute to update"
+            });
+        }
+
+        // Only allow valid lesson attributes
+        const allowedFields = ["topic", "location", "price", "space", "image"];
+
+        const invalidFields = Object.keys(updates).filter(
+            field => !allowedFields.includes(field)
+        );
+
+        if (invalidFields.length > 0) {
+            return response.status(400).json({
+                message: "Invalid lesson attribute",
+                invalidFields
+            });
+        }
+
         const result = await db.collection("lessons").updateOne(
-            {
-                id: lessonId,
-                space: { $gt: 0 }
-            },
-            {
-                $inc: { space: -1 }
-            }
+            { id: lessonId },
+            { $set: updates }
         );
 
         if (result.matchedCount === 0) {
             return response.status(404).json({
-                message: "Lesson not found or no spaces available"
+                message: "Lesson not found"
             });
         }
 
@@ -242,7 +264,7 @@ app.put("/lessons/:id", async function(request, response) {
             .findOne({ id: lessonId });
 
         response.json({
-            message: "Lesson space updated successfully",
+            message: "Lesson updated successfully",
             lesson: updatedLesson
         });
 
@@ -252,6 +274,7 @@ app.put("/lessons/:id", async function(request, response) {
         });
     }
 });
+
 
 // Handle unknown routes
 app.use(function(request, response) {

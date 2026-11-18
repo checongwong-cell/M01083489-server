@@ -1,13 +1,6 @@
-var mongoose = require("mongoose");
 
-var orderSchema = new mongoose.Schema({
-    customer: {
-        name: String,
-        phone: String,
-        address: String
-    },
-    items: Array,
-    total: Number
-});
+function getOrdersCollection(db) {
+    return db.collection("orders");
+}
 
-module.exports = mongoose.model("Order", orderSchema);
+module.exports = getOrdersCollection;
