@@ -1,31 +1,46 @@
 require("dotenv").config();
-var mongoose = require("mongoose");
-var Lesson = require("./models/lesson");
-var Order = require("./models/order");
 
-var express = require("express");
+const { MongoClient, ObjectId } = require("mongodb");
+const express = require("express");
+const cors = require("cors");
 
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log("Connected to MongoDB Atlas!");
-    })
-    .catch((error) => {
-        console.error("MongoDB connection error:", error);
-    });
-var cors = require("cors");
-
-var app = express();
+const app = express();
 
 app.use(cors());
-
 app.use(express.json());
 
+// Serve lesson images
 app.use("/images", express.static("Staticfiles"));
 
+// Logger middleware
 app.use(function(request, response, next) {
-    console.log("Incoming " + request.method + " request to " + request.url);
+    console.log(
+        "Incoming " + request.method + " request to " + request.url
+    );
     next();
 });
+
+// Native MongoDB connection
+const client = new MongoClient(process.env.MONGODB_URI);
+
+let db;
+
+async function connectToMongoDB() {
+    try {
+        await client.connect();
+        db = client.db("test");
+
+        console.log("Connected to MongoDB Atlas!");
+
+        const PORT = process.env.PORT || 3000;
+
+        app.listen(PORT, "0.0.0.0", function() {
+            console.log("App started on port " + PORT);
+        });
+    } catch (error) {
+        console.error("MongoDB connection error:", error);
+    }
+}
 
 var lessons = [
   {
@@ -110,9 +125,14 @@ var lessons = [
   }
 ];
 
+
+// Seed lessons into MongoDB
 app.post("/seed-lessons", async function(request, response) {
     try {
-        const existingLessons = await Lesson.find({}, { id: 1 });
+        const existingLessons = await db.collection("lessons")
+            .find({}, { projection: { id: 1 } })
+            .toArray();
+
         const existingIds = existingLessons.map(lesson => lesson.id);
 
         const newLessons = lessons.filter(
@@ -120,14 +140,17 @@ app.post("/seed-lessons", async function(request, response) {
         );
 
         if (newLessons.length === 0) {
-            return response.json({ message: "All lessons already exist" });
+            return response.json({
+                message: "All lessons already exist"
+            });
         }
 
-        const inserted = await Lesson.insertMany(newLessons);
+        const inserted = await db.collection("lessons")
+            .insertMany(newLessons);
 
         response.json({
             message: "Lessons inserted successfully",
-            count: inserted.length
+            count: inserted.insertedCount
         });
 
     } catch (error) {
@@ -135,69 +158,111 @@ app.post("/seed-lessons", async function(request, response) {
     }
 });
 
+// Save an order
 app.post("/orders", async function(request, response) {
     try {
-        const order = new Order(request.body);
-        await order.save();
+        const order = {
+            ...request.body,
+            createdAt: new Date()
+        };
 
-        console.log("New order saved:", order);
+        const result = await db.collection("orders").insertOne(order);
 
         response.status(201).json({
             message: "Order saved successfully",
-            order: order
+            order: {
+                ...order,
+                _id: result.insertedId
+            }
         });
+
     } catch (error) {
         console.error("Order saving error:", error);
+
         response.status(500).json({
             error: error.message
         });
     }
 });
 
-app.get("/lessons", async function(request, response) {
+// Get all orders
+app.get("/orders", async function(request, response) {
     try {
-        const lessonsFromDB = await Lesson.find({});
-        response.json(lessonsFromDB);
+        const orders = await db.collection("orders")
+            .find({})
+            .toArray();
+
+        response.json(orders);
+
     } catch (error) {
-        response.status(500).json({ error: "Failed to fetch lessons" });
+        response.status(500).json({
+            error: "Failed to fetch orders"
+        });
     }
 });
 
+// Get all lessons
+app.get("/lessons", async function(request, response) {
+    try {
+        const lessonsFromDB = await db.collection("lessons")
+            .find({})
+            .toArray();
+
+        response.json(lessonsFromDB.map(lesson => ({
+    ...lesson,
+    image: lesson.image.replace(
+        /^.*\/images\//,
+        `${request.protocol}://${request.get("host")}/images/`
+    )
+})));
+
+    } catch (error) {
+        response.status(500).json({
+            error: "Failed to fetch lessons"
+        });
+    }
+});
+
+// Update lesson spaces when a lesson is purchased
 app.put("/lessons/:id", async function(request, response) {
     try {
-        const lesson = await Lesson.findOneAndUpdate(
+        const lessonId = Number(request.params.id);
+
+        const result = await db.collection("lessons").updateOne(
             {
-                id: Number(request.params.id),
+                id: lessonId,
                 space: { $gt: 0 }
             },
             {
                 $inc: { space: -1 }
-            },
-            { new: true }
+            }
         );
 
-        if (!lesson) {
+        if (result.matchedCount === 0) {
             return response.status(404).json({
                 message: "Lesson not found or no spaces available"
             });
         }
 
+        const updatedLesson = await db.collection("lessons")
+            .findOne({ id: lessonId });
+
         response.json({
             message: "Lesson space updated successfully",
-            lesson: lesson
+            lesson: updatedLesson
         });
 
     } catch (error) {
-        response.status(500).json({ error: error.message });
+        response.status(500).json({
+            error: error.message
+        });
     }
 });
 
+// Handle unknown routes
 app.use(function(request, response) {
     response.status(404).send("Page not found!");
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', function() {
-    console.log(`App started on port ${PORT}`);
-});
+// Start the server after connecting to MongoDB
+connectToMongoDB();
