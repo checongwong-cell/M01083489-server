@@ -284,6 +284,73 @@ app.get("/search", async function(request, response) {
     }
 });
 
+// Get all teachers
+app.get("/teachers", async function(request, response) {
+    try {
+        const teachers = await db.collection("teachers")
+            .find({})
+            .toArray();
+
+        response.json(teachers);
+
+    } catch (error) {
+        console.error("Get teachers error:", error);
+
+        response.status(500).json({
+            error: "Failed to fetch teachers"
+        });
+    }
+});
+
+// Get all lessons taught by a selected teacher
+app.get("/teachers/:teacherId/lessons", async function(request, response) {
+    try {
+        const teacher = await db.collection("teachers")
+            .findOne({
+                teacherId: request.params.teacherId
+            });
+
+        if (!teacher) {
+            return response.status(404).json({
+                error: "Teacher not found"
+            });
+        }
+
+        const lessons = await db.collection("lessons")
+            .find({
+                id: { $in: teacher.lessonIds || [] }
+            })
+            .toArray();
+
+        const formattedLessons = lessons.map(lesson => ({
+            ...lesson,
+            image: lesson.image
+                ? lesson.image.replace(
+                    /^.*\/images\//,
+                    `${request.protocol}://${request.get("host")}/images/`
+                )
+                : lesson.image
+        }));
+
+        response.json({
+            teacher: {
+                teacherId: teacher.teacherId,
+                firstName: teacher.firstName,
+                lastName: teacher.lastName
+            },
+            lessons: formattedLessons
+        });
+
+    } catch (error) {
+        console.error("Get teacher lessons error:", error);
+
+        response.status(500).json({
+            error: "Failed to fetch teacher lessons"
+        });
+    }
+});
+
+
 // Update any lesson attribute
 app.put("/lessons/:id", async function(request, response) {
     try {
