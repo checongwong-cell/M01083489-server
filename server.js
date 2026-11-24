@@ -217,6 +217,73 @@ app.get("/lessons", async function(request, response) {
     }
 });
 
+// Search lessons by topic, location, price or available spaces
+app.get("/search", async function(request, response) {
+    try {
+        const searchTerm = String(request.query.q || "").trim();
+
+        if (searchTerm === "") {
+            return response.status(400).json({
+                error: "Please enter a search term"
+            });
+        }
+
+        const searchResults = await db.collection("lessons")
+            .find({
+                $or: [
+                    {
+                        topic: {
+                            $regex: searchTerm,
+                            $options: "i"
+                        }
+                    },
+                    {
+                        location: {
+                            $regex: searchTerm,
+                            $options: "i"
+                        }
+                    },
+                    {
+                        $expr: {
+                            $regexMatch: {
+                                input: { $toString: "$price" },
+                                regex: searchTerm,
+                                options: "i"
+                            }
+                        }
+                    },
+                    {
+                        $expr: {
+                            $regexMatch: {
+                                input: { $toString: "$space" },
+                                regex: searchTerm,
+                                options: "i"
+                            }
+                        }
+                    }
+                ]
+            })
+            .toArray();
+
+        const formattedResults = searchResults.map(lesson => ({
+            ...lesson,
+            image: lesson.image.replace(
+                /^.*\/images\//,
+                `${request.protocol}://${request.get("host")}/images/`
+            )
+        }));
+
+        response.json(formattedResults);
+
+    } catch (error) {
+        console.error("Search error:", error);
+
+        response.status(500).json({
+            error: "Failed to search lessons"
+        });
+    }
+});
+
 // Update any lesson attribute
 app.put("/lessons/:id", async function(request, response) {
     try {
