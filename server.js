@@ -275,6 +275,38 @@ app.put("/lessons/:id", async function(request, response) {
     }
 });
 
+// Get enrolment number for a lesson
+app.get("/enrolment/:lessonid", async function(request, response) {
+    try {
+        const lessonId = Number(request.params.lessonid);
+
+        if (!Number.isInteger(lessonId)) {
+            return response.status(400).json({
+                error: "Invalid lesson ID"
+            });
+        }
+
+        const result = await db.collection("orders").aggregate([
+            { $unwind: "$items" },
+            { $match: { "items.id": lessonId } },
+            { $count: "enrolment" }
+        ]).toArray();
+
+        const enrolment = result.length > 0
+            ? result[0].enrolment
+            : 0;
+
+        response.json({
+            lessonId: lessonId,
+            enrolment: enrolment
+        });
+
+    } catch (error) {
+        response.status(500).json({
+            error: error.message
+        });
+    }
+});
 
 // Handle unknown routes
 app.use(function(request, response) {
