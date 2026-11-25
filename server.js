@@ -6,12 +6,6 @@ const cors = require("cors");
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
-
-// Serve lesson images
-app.use("/images", express.static("Staticfiles"));
-
 // Logger middleware
 app.use(function(request, response, next) {
     console.log(
@@ -19,6 +13,12 @@ app.use(function(request, response, next) {
     );
     next();
 });
+
+app.use(cors());
+app.use(express.json());
+
+// Serve lesson images
+app.use("/images", express.static("Staticfiles"));
 
 // Native MongoDB connection
 const client = new MongoClient(process.env.MONGODB_URI);
